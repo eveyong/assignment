@@ -44,30 +44,67 @@ The report includes:
 * R code in the appendices
 
 
-\newpage
-## Exploratory Data Analysis
 
 
+## Data Cleaning and Preparation
+
+There are two sets of data - monthly and yearly. We take a look at each one of them to find out what information is available and check for duplicates and missing values. Then we determine which variables or columns are least useful (so we drop them) or which ones require modifying for our analysis.
 
 
 ```{r}
 #clearing out the environment first
 rm(list=ls()) 
 
-#importing the data from 2 files
-data_m <- read.csv("1_data/housing_in_london_monthly_variables.csv", sep = ",", header = TRUE)
-head(data_m)
+#importing the data from monthly file first
+data_monthly <- read.csv("1_data/housing_in_london_monthly_variables.csv", sep = ",", header = TRUE)
+str(data_monthly)
 
-data_y <- read.csv("1_data/housing_in_london_yearly_variables.csv", sep = ",", header = TRUE)
-head(data_y)
+```
+```{r}
+#pushing this to a separate r line because it could not fit the frame with the structure above
+head(data_monthly)
+```
+
+
+```{r}
+#install.packages("psych")
+library(psych)
+describe(data_monthly)
+```
+The monthly data contains 13,549 rows and 7 columns. This data also contains the "average price" variable that we need to predict by the end of the report. It also contains the code and area, which could be useful for matching against the yearly data. There is also crime information, which might be useful to predict house prices. 
+
+From the table above, we can see that "no_of_crimes" may not be a useful factor for analysis because it only appears around 7,500 times, which means that factor has missing values for almost half of the table.
+
+Next, we explore the yearly data.
+
+```{r}
+#importing the data from the yearly file
+data_yearly <- read.csv("1_data/housing_in_london_yearly_variables.csv", sep = ",", header = TRUE)
+str(data_yearly)
+head(data_yearly)
+
+```
+```{r}
+describe(data_yearly)
+```
+
+The yearly data is more generous, it contains more factors that could contribute to average house prices, e.g. life satisfaction, area size, population, salary, etc. As pointed out in the monthly data, we see that "code" and "area" are the common variables / columns among the two data files.
+
+Like the monthly data, there seems to be some missing variables in the yearly data - "life satisfaction", "number of jobs", and "area size". 
+
+```{r}
+#need the dplyr for data manipulation
+#install.packages("dplyr")
+library(dplyr)
+
+#check for duplicates
+duplicated(data_monthly)
 
 ```
 
-### Data Cleaning
+\newpage
+## Exploratory Data Analysis
 
-
-
-### Data Exploration and Visualisation
 
 Insights
 
