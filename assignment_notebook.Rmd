@@ -1,26 +1,148 @@
 ---
-title: "R Notebook"
-output: html_notebook
+title: "Housing in London"
+author: "Wen Qian Yong"
+date: "May 2021"
+header-includes: 
+- \usepackage{fancyhdr}
+- \pagestyle{fancy}
+- \fancyhead[R]{Wen Qian Yong}
+- \fancyfoot[C]{Housing in London}
+- \fancyfoot[R]{\thepage}
+subtitle: "What contributes to London's house prices?"
+abstract: "The Kaggle dataset used here is primarily centered around the housing market of London. It contains a lot of additional relevant data, such as average house prices, salary, percentage of households that recycle, life satisfaction, number of jobs, area size in hectares, number of people living in the area, and the number of crimes committed. The dataset is used to analyse how London's house prices change over time and what contributes to different house prices in different boroughs, then ultimately predict future house prices using machine learning techniques."
+keywords: "House prices, prediction, machine learning, data analytics"
+output: 
+  pdf_document:
+    toc: true
+    
 ---
 
-This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+```{r global-options, include=FALSE}
+#install.packages("fancyhdr")
+#library(fancyhdr)
+#install.packages("knitr")
 
-Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+# setting global options for the code to not show in PDF, but these will be picked up in appendix via another code
+library(knitr) 
+knitr::opts_chunk$set(echo=FALSE, warning=FALSE, message=FALSE)
+
+```
+\newpage
+
+## Introduction
+
+The dataset chosen is the "Housing in London 2020", found on Kaggle (https://www.kaggle.com/justinas/housing-in-london). This dataset contains a lot of additional relevant data, such as average house prices, salary, percentage of households that recycle, life satisfaction, number of jobs, area size in hectares, number of people living in the area, and the number of crimes committed.The data is split into two files based on the variable collection frequency (monthly and yearly).
+
+The purpose of choosing this dataset is to analyse how London's house prices change over time and what contributes to different house prices in different boroughs. There are several machine learning algorithms used to predict London's house prices and results are compared to determine which alhorithm works better for this dataset.
+
+The report includes:
+
+* Data cleaning and preparation
+* Data exploration and visualisation
+* Modelling, prediction, and evaluation
+* Conclusion
+* R code in the appendices
+
+
+
+
+## Data Cleaning and Preparation
+
+There are two sets of data - monthly and yearly. We take a look at each one of them to find out what information is available and check for duplicates and missing values. Then we determine which variables or columns are least useful (so we drop them) or which ones require modifying for our analysis.
+
 
 ```{r}
+#clearing out the environment first
+rm(list=ls()) 
 
-data_m <- read.csv("1_data/housing_in_london_monthly_variables.csv", sep = ",", header = TRUE)
-str(data_m)
-summary(data_m)
+#importing the data from monthly file first
+data_monthly <- read.csv("1_data/housing_in_london_monthly_variables.csv", sep = ",", header = TRUE)
+str(data_monthly)
 
-data_y <- read.csv("1_data/housing_in_london_yearly_variables.csv", sep = ",", header = TRUE)
-str(data_y)
-summary(data_y)
+```
+```{r}
+#pushing this to a separate r line because it could not fit the frame with the structure above
+head(data_monthly)
+```
+
+
+```{r}
+#install.packages("psych")
+library(psych)
+describe(data_monthly)
+```
+The monthly data contains 13,549 rows and 7 columns. This data also contains the "average price" variable that we need to predict by the end of the report. It also contains the code and area, which could be useful for matching against the yearly data. There is also crime information, which might be useful to predict house prices. 
+
+From the table above, we can see that "no_of_crimes" may not be a useful factor for analysis because it only appears around 7,500 times, which means that factor has missing values for almost half of the table.
+
+Next, we explore the yearly data.
+
+```{r}
+#importing the data from the yearly file
+data_yearly <- read.csv("1_data/housing_in_london_yearly_variables.csv", sep = ",", header = TRUE)
+str(data_yearly)
+head(data_yearly)
+
+```
+```{r}
+describe(data_yearly)
+```
+
+The yearly data is more generous, it contains more factors that could contribute to average house prices, e.g. life satisfaction, area size, population, salary, etc. As pointed out in the monthly data, we see that "code" and "area" are the common variables / columns among the two data files.
+
+Like the monthly data, there seems to be some missing variables in the yearly data - "life satisfaction", "number of jobs", and "area size". 
+
+```{r}
+#need the dplyr for data manipulation
+#install.packages("dplyr")
+library(dplyr)
+
+#check for duplicates
+duplicated(data_monthly)
 
 ```
 
-Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+\newpage
+## Exploratory Data Analysis
 
-When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
 
-The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+Insights
+
+
+
+
+
+
+\newpage
+## Factors Contributing to House Prices
+
+### Modelling 1
+
+
+
+### Modelling 2
+
+
+\newpage
+## Evaluation of Models
+
+
+
+
+
+\newpage
+## Conclusion
+
+
+
+
+\newpage
+## Limitations and Potential Future Work
+
+
+\newpage
+## Appendices
+
+```{r ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE}
+```
+
