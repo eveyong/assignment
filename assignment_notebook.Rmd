@@ -1,1 +1,111 @@
+---
+title: "Housing in London"
+author: "Wen Qian Yong"
+date: "May 2021"
+header-includes: 
+- \usepackage{fancyhdr}
+- \pagestyle{fancy}
+- \fancyhead[R]{Wen Qian Yong}
+- \fancyfoot[C]{Housing in London}
+- \fancyfoot[R]{\thepage}
+subtitle: "What contributes to London's house prices?"
+abstract: "The Kaggle dataset used here is primarily centered around the housing market of London. It contains a lot of additional relevant data, such as average house prices, salary, percentage of households that recycle, life satisfaction, number of jobs, area size in hectares, number of people living in the area, and the number of crimes committed. The dataset is used to analyse how London's house prices change over time and what contributes to different house prices in different boroughs, then ultimately predict future house prices using machine learning techniques."
+keywords: "House prices, prediction, machine learning, data analytics"
+output: 
+  pdf_document:
+    toc: true
+    
+---
+
+```{r global-options, include=FALSE}
+#install.packages("fancyhdr")
+#library(fancyhdr)
+#install.packages("knitr")
+
+# setting global options for the code to not show in PDF, but these will be picked up in appendix via another code
+library(knitr) 
+knitr::opts_chunk$set(echo=FALSE, warning=FALSE, message=FALSE)
+
+```
+\newpage
+
+## Introduction
+
+The dataset chosen is the "Housing in London 2020", found on Kaggle (https://www.kaggle.com/justinas/housing-in-london). This dataset contains a lot of additional relevant data, such as average house prices, salary, percentage of households that recycle, life satisfaction, number of jobs, area size in hectares, number of people living in the area, and the number of crimes committed.The data is split into two files based on the variable collection frequency (monthly and yearly).
+
+The purpose of choosing this dataset is to analyse how London's house prices change over time and what contributes to different house prices in different boroughs. There are several machine learning algorithms used to predict London's house prices and results are compared to determine which alhorithm works better for this dataset.
+
+The report includes:
+
+* Data cleaning and preparation
+* Data exploration and visualisation
+* Modelling, prediction, and evaluation
+* Conclusion
+* R code in the appendices
+
+
+\newpage
+## Exploratory Data Analysis
+
+
+
+
+```{r}
+#clearing out the environment first
+rm(list=ls()) 
+
+#importing the data from 2 files
+data_m <- read.csv("1_data/housing_in_london_monthly_variables.csv", sep = ",", header = TRUE)
+head(data_m)
+
+data_y <- read.csv("1_data/housing_in_london_yearly_variables.csv", sep = ",", header = TRUE)
+head(data_y)
+
+```
+
+### Data Cleaning
+
+
+
+### Data Exploration and Visualisation
+
+Insights
+
+
+
+
+
+
+\newpage
+## Factors Contributing to House Prices
+
+### Modelling 1
+
+
+
+### Modelling 2
+
+
+\newpage
+## Evaluation of Models
+
+
+
+
+
+\newpage
+## Conclusion
+
+
+
+
+\newpage
+## Limitations and Potential Future Work
+
+
+\newpage
+## Appendices
+
+```{r ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE}
+```
 
