@@ -65,15 +65,23 @@ str(data_monthly)
 head(data_monthly)
 ```
 
+The monthly data contains 13,549 rows and 7 columns. This data also contains the "average price" variable that we need to predict by the end of the report. It also contains the code and area, which could be useful for matching against the yearly data. There is also crime information, which might be useful to predict house prices. 
+
+Checking for missing values.
 
 ```{r}
 #install.packages("psych")
-library(psych)
-describe(data_monthly)
-```
-The monthly data contains 13,549 rows and 7 columns. This data also contains the "average price" variable that we need to predict by the end of the report. It also contains the code and area, which could be useful for matching against the yearly data. There is also crime information, which might be useful to predict house prices. 
+#library(psych)
+#describe(data_monthly)
 
-From the table above, we can see that "no_of_crimes" may not be a useful factor for analysis because it only appears around 7,500 times, which means that factor has missing values for almost half of the table.
+
+#install.packages("naniar")
+library(naniar)
+miss_var_summary(data_monthly)
+
+```
+
+From the table above, we can see that "no_of_crimes" may not be a useful factor for analysis because it appears to be 45% missing from the data.
 
 Next, we explore the yearly data.
 
@@ -84,13 +92,16 @@ str(data_yearly)
 head(data_yearly)
 
 ```
-```{r}
-describe(data_yearly)
-```
 
 The yearly data is more generous, it contains more factors that could contribute to average house prices, e.g. life satisfaction, area size, population, salary, etc. As pointed out in the monthly data, we see that "code" and "area" are the common variables / columns among the two data files.
 
-Like the monthly data, there seems to be some missing variables in the yearly data - "life satisfaction", "number of jobs", and "area size". 
+
+```{r}
+#describe(data_yearly)
+miss_var_summary(data_yearly)
+
+```
+Like the monthly data, there seems to be some missing variables in the yearly data, most of which can be manipulated to populate some data. The field "life satisfaction" is almost 70% missing from the data, so we might choose to drop that field altogether.
 
 ```{r}
 #need the dplyr for data manipulation
