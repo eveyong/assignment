@@ -31,7 +31,7 @@ knitr::opts_chunk$set(echo=FALSE, warning=FALSE, message=FALSE)
 
 ## Introduction
 
-The dataset chosen is the "Housing in London 2020", found on Kaggle (https://www.kaggle.com/justinas/housing-in-london). This dataset contains a lot of additional relevant data, such as average house prices, salary, percentage of households that recycle, life satisfaction, number of jobs, area size in hectares, number of people living in the area, and the number of crimes committed.The data is split into two files based on the variable collection frequency (monthly and yearly).
+The dataset chosen is the "Housing in London 2020", found on Kaggle (https://www.kaggle.com/justinas/housing-in-london), split by areas of London called boroughs (a flag exists to identify these). This dataset contains a lot of additional relevant data, such as average house prices, salary, percentage of households that recycle, life satisfaction, number of jobs, area size in hectares, number of people living in the area, and the number of crimes committed.The data is split into two files based on the variable collection frequency (monthly and yearly).
 
 The purpose of choosing this dataset is to analyse how London's house prices change over time and what contributes to different house prices in different boroughs. There are several machine learning algorithms used to predict London's house prices and results are compared to determine which alhorithm works better for this dataset.
 
@@ -56,13 +56,13 @@ There are two sets of data - monthly and yearly. We take a look at each one of t
 rm(list=ls()) 
 
 #importing the data from monthly file first
-data_monthly <- read.csv("1_data/housing_in_london_monthly_variables.csv", sep = ",", header = TRUE)
-str(data_monthly)
+data_monthly_raw <- read.csv("1_data/housing_in_london_monthly_variables.csv", sep = ",", header = TRUE)
+str(data_monthly_raw)
 
 ```
 ```{r}
 #pushing this to a separate r line because it could not fit the frame with the structure above
-head(data_monthly)
+head(data_monthly_raw)
 ```
 
 The monthly data contains 13,549 rows and 7 columns. This data also contains the "average price" variable that we need to predict by the end of the report. It also contains the code and area, which could be useful for matching against the yearly data. There is also crime information, which might be useful to predict house prices. 
@@ -72,24 +72,64 @@ Checking for missing values.
 ```{r}
 #install.packages("psych")
 #library(psych)
-#describe(data_monthly)
+#describe(data_monthly_raw)
 
 
 #install.packages("naniar")
 library(naniar)
-miss_var_summary(data_monthly)
+miss_var_summary(data_monthly_raw)
 
 ```
 
-From the table above, we can see that "no_of_crimes" may not be a useful factor for analysis because it appears to be 45% missing from the data.
+From the table above, we can see that a very small percentage of "houses sold" is missing values. The field "no_of_crimes" appears to be 45% missing from the data, which seems to be a concern for the analysis. 
+
+```{r}
+
+#install.packages("ggplot2")
+library(ggplot2)
+library(dplyr)
+
+#introduce the year and month columns rather than relying on the date column
+data_monthly <- data_monthly_raw %>% 
+  mutate(year = as.numeric(substr(date,1,4))) %>% 
+  mutate(month = as.numeric(substr(date,6,7)))
+
+#checking the crime column to see why so many are missing
+data_monthly %>% 
+  ggplot(aes(year, no_of_crimes, col = borough_flag)) +
+  geom_point(show.legend = T) 
+#looks like it is only introduced in 2001
+
+
+```
+
+Figure X above shows that the crime data was only introduced in 2001, and that it only exists for data within London's boroughs (those with the flag =1), which is the main focus of the data analysis. No further action on the crime column for now until we join the monthly data with the yearly data. 
+
+The following data manipulations are performed to the monthly data:
+
+* Introduce two additional columns called "year" and "month" to represent the year and month of the data because it will make joining to the yearly data file easier;
+* Replace the missing values of "houses sold" with the mean value because so few are missing, it would not make a huge difference what it is replaced by, but getting rid of the missing values will be useful for data analysis further down the track; and
+* Filter for boroughs in London only as that is the target market we are interested in only, this reduces the number of rows to 9,936.
+
+
+```{r}
+data_monthly <- data_monthly_raw %>% 
+  filter(borough_flag == 1) %>%
+  mutate(year = as.numeric(substr(date,1,4))) %>% #to preserve the previous manipulations
+  mutate(month = as.numeric(substr(date,6,7))) %>% #to preserve the previous manipulations
+  mutate(houses_sold = ifelse(is.na(houses_sold), mean(houses_sold,na.rm=TRUE), houses_sold))
+  
+#checking for missing values
+miss_var_summary(data_monthly)
+```
 
 Next, we explore the yearly data.
 
 ```{r}
 #importing the data from the yearly file
-data_yearly <- read.csv("1_data/housing_in_london_yearly_variables.csv", sep = ",", header = TRUE)
-str(data_yearly)
-head(data_yearly)
+data_yearly_raw <- read.csv("1_data/housing_in_london_yearly_variables.csv", sep = ",", header = TRUE)
+str(data_yearly_raw)
+head(data_yearly_raw)
 
 ```
 
@@ -98,20 +138,97 @@ The yearly data is more generous, it contains more factors that could contribute
 
 ```{r}
 #describe(data_yearly)
-miss_var_summary(data_yearly)
+miss_var_summary(data_yearly_raw)
 
 ```
-Like the monthly data, there seems to be some missing variables in the yearly data, most of which can be manipulated to populate some data. The field "life satisfaction" is almost 70% missing from the data, so we might choose to drop that field altogether.
+Like the monthly data, there seems to be some missing variables in the yearly data, most of which can be manipulated to populate some data. The field "life satisfaction" is almost 70% missing from the data, so we might choose to drop that field altogether. Before we do that, we look at the distribution of life satisfaction, area size, number of houses, and number of jobs to see why there are so many missing values.
+
+
+```{r}
+
+#introduce the year column for easy plotting and only filter for London boroughs
+data_yearly <- data_yearly_raw %>% 
+  filter(borough_flag == 1) %>%
+  mutate(year = as.numeric(substr(date,1,4)))
+
+p1 <- data_yearly %>% 
+        ggplot(aes(year, life_satisfaction)) +
+        geom_point(color = "blue") +
+        theme(plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"))
+
+p2 <- data_yearly %>% 
+        ggplot(aes(year, area_size)) +
+        geom_point(color = "dark green") +
+        theme(plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"))
+
+p3 <- data_yearly %>% 
+        ggplot(aes(year, no_of_houses)) +
+        geom_point(color = "maroon") +
+        theme(plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"))
+
+p4 <- data_yearly %>% 
+        ggplot(aes(year, number_of_jobs)) +
+        geom_point(color = "orange") +
+        theme(plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"))
+
+#use gridExtra for arranging the graphs on one panel
+#install.packages("gridExtra")
+library(gridExtra)
+#install.packages("grid")
+library(grid)
+
+grid.arrange(
+  p1,
+  p2,
+  p3,
+  p4,
+  nrow = 2.5,
+  top = "Why are there missing values from these variables?",
+  bottom = textGrob(
+    "filtered for areas in London boroughs",
+    gp = gpar(fontface = 3, fontsize = 9),
+    hjust = 1,
+    x = 1
+  )
+)
+
+```
+
+The reason why life satisfaction has so many missing variables is because the data collection did not start until past 2010. While we may not use this in our machine learning techniques, we could still choose to separate the analysis into post-2010 with life satisfaction added as another factor.
+
+For the other missing variables, we can replace them with their mean values.
 
 ```{r}
 #need the dplyr for data manipulation
 #install.packages("dplyr")
 library(dplyr)
 
-#check for duplicates
-duplicated(data_monthly)
+data_yearly <- data_yearly_raw %>% 
+  filter(borough_flag == 1) %>%
+  mutate(year = as.numeric(substr(date,1,4))) %>% 
+  mutate(month = as.numeric(substr(date,6,7))) %>% 
+  mutate(median_salary = ifelse(is.na(median_salary), mean(median_salary,na.rm=TRUE), median_salary)) %>%
+  mutate(population_size = ifelse(is.na(population_size), mean(population_size,na.rm=TRUE), population_size)) #%>%
+ # mutate(area_size = ifelse(is.na(area_size), mean(area_size,na.rm=TRUE), area_size)) %>%
+#  mutate(number_of_jobs = ifelse(is.na(number_of_jobs), mean(number_of_jobs,na.rm=TRUE), number_of_jobs)) %>%
+#  mutate(no_of_houses = ifelse(is.na(no_of_houses), mean(no_of_houses,na.rm=TRUE), no_of_houses))
+
 
 ```
+
+The following data manipulations are performed to the yearly data:
+
+* Similarly to monthly data, introduce two additional columns called "year" and "month" to represent the year and month of the data
+* Replace the missing values of median salary and population size with their mean values because the percentages missing are low; and
+* Filter for boroughs in London only as that is the target market we are interested in only, this reduces the number of rows to 693.
+
+```{r}
+#checking for missing variables again after filtering and manipulating
+miss_var_summary(data_yearly)
+```
+### Joining the two data files into one
+
+
 
 \newpage
 ## Exploratory Data Analysis
