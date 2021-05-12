@@ -138,7 +138,7 @@ The yearly data is more generous, it contains more factors that could contribute
 
 ```{r}
 #describe(data_yearly)
-miss_var_summary(data_yearly_raw)
+miss_var_summary(data_yearly_raw) 
 
 ```
 Like the monthly data, there seems to be some missing variables in the yearly data, most of which can be manipulated to populate some data. The field "life satisfaction" is almost 70% missing from the data, so we might choose to drop that field altogether. Before we do that, we look at the distribution of life satisfaction, area size, number of houses, and number of jobs to see why there are so many missing values.
@@ -154,21 +154,31 @@ data_yearly <- data_yearly_raw %>%
 p1 <- data_yearly %>% 
         ggplot(aes(year, life_satisfaction)) +
         geom_point(color = "blue") +
-        theme(plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"))
+        theme(plot.margin=unit(c(0.25,0.5,0.25,0.5),"cm"))
 
 p2 <- data_yearly %>% 
         ggplot(aes(year, area_size)) +
         geom_point(color = "dark green") +
-        theme(plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"))
+        theme(plot.margin=unit(c(0.25,0.5,0.25,0.5),"cm"))
 
 p3 <- data_yearly %>% 
         ggplot(aes(year, no_of_houses)) +
         geom_point(color = "maroon") +
-        theme(plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"))
+        theme(plot.margin=unit(c(0.25,0.5,0.25,0.5),"cm"))
 
 p4 <- data_yearly %>% 
         ggplot(aes(year, number_of_jobs)) +
         geom_point(color = "orange") +
+        theme(plot.margin=unit(c(0.25,0.5,0.25,0.5),"cm"))
+
+p5 <- data_yearly %>% 
+        ggplot(aes(year, population_size)) +
+        geom_point(color = "mistyrose4") +
+        theme(plot.margin=unit(c(0.25,0.5,0.25,0.5),"cm"))
+
+p6 <- data_yearly %>% 
+        ggplot(aes(year, median_salary)) +
+        geom_point(color = "plum4") +
         theme(plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"))
 
 #use gridExtra for arranging the graphs on one panel
@@ -182,7 +192,9 @@ grid.arrange(
   p2,
   p3,
   p4,
-  nrow = 2.5,
+  p5,
+  p6,
+  nrow = 3.5,
   top = "Why are there missing values from these variables?",
   bottom = textGrob(
     "filtered for areas in London boroughs",
@@ -196,7 +208,11 @@ grid.arrange(
 
 The reason why life satisfaction has so many missing variables is because the data collection did not start until past 2010. While we may not use this in our machine learning techniques, we could still choose to separate the analysis into post-2010 with life satisfaction added as another factor.
 
-For the other missing variables, we can replace them with their mean values.
+For the other missing variables, we make the following observations:
+* population size, number of jobs, and number of houses for 2019 is not populated
+* area size is constant and only populated from 2001 to 2018
+* median salary is populated since 1999
+
 
 ```{r}
 #need the dplyr for data manipulation
@@ -206,19 +222,30 @@ library(dplyr)
 data_yearly <- data_yearly_raw %>% 
   filter(borough_flag == 1) %>%
   mutate(year = as.numeric(substr(date,1,4))) %>% 
-  mutate(month = as.numeric(substr(date,6,7))) %>% 
-  mutate(median_salary = ifelse(is.na(median_salary), mean(median_salary,na.rm=TRUE), median_salary)) %>%
-  mutate(population_size = ifelse(is.na(population_size), mean(population_size,na.rm=TRUE), population_size)) #%>%
- # mutate(area_size = ifelse(is.na(area_size), mean(area_size,na.rm=TRUE), area_size)) %>%
-#  mutate(number_of_jobs = ifelse(is.na(number_of_jobs), mean(number_of_jobs,na.rm=TRUE), number_of_jobs)) %>%
-#  mutate(no_of_houses = ifelse(is.na(no_of_houses), mean(no_of_houses,na.rm=TRUE), no_of_houses))
+  mutate(month = as.numeric(substr(date,6,7)))  
+
+#the following code populates area size for each borough according to its mean (constant number)
+#also the same procedure for median salary
+#install.packages("data.table")
+library(data.table)
+library(plyr); library(dplyr)
+setDT(data_yearly)
+data_yearly[, area_size := impute_mean(area_size), by = area][, median_salary := impute_mean(median_salary), by = area]
+data_yearly %>%
+    group_by(area) %>%
+    mutate(
+        area_size = impute_mean(area_size),
+        median_salary = impute_mean(median_salary)
+    )
+
 
 ```
 
 The following data manipulations are performed to the yearly data:
 
 * Similarly to monthly data, introduce two additional columns called "year" and "month" to represent the year and month of the data
-* Replace the missing values of median salary and population size with their mean values because the percentages missing are low; and
+* Replace the missing values of median salary with its mean values because the percentages missing are low; 
+* Replace the missing values of area size with its the associated borough's area size as these area sizes do not change overtime - they have been set in stone since the beginning; and
 * Filter for boroughs in London only as that is the target market we are interested in only, this reduces the number of rows to 693.
 
 ```{r}
@@ -252,12 +279,55 @@ head(data_final)
 \newpage
 ## Exploratory Data Analysis
 
+The dataset now has average house prices for 33 boroughs since 1999 until 2019 (21 years), along with the following 9 attributes:
+```{r}
+#create matrix with 3 columns
+tab <- matrix(c("median salary", "-",
+                "mean salary", "-",
+                "percentage of recycling houses", "-",
+                "population size", "data collected until 2018 only",
+                "number of jobs", "(data collected until 2018 only)",
+                "number of houses sold", "(data collected until 2018 only)",
+                "area size", "(data collected from 2001 only)",
+                "number of crimes", "(data collected from 2001 only)",
+                "life satisfaction", "(data collected from 2011 only)"), 
+              ncol=2, byrow=TRUE)
+
+#define column names and row names of matrix
+colnames(tab) <- c("Factor or attribute", "Comments on missing variables")
+rownames(tab) <- c("1.", "2.", "3.", "4.", "5.", "6.", "7.", "8.", "9.")
+
+#convert matrix to table 
+tab <- as.table(tab)
+
+#view table 
+tab
+
+```
+The 33 boroughs are shown below. 
 
 ```{r}
 print(unique((data_final$area)))
 
 ```
+The graph below shows how average house prices have changed from 1999 to 2019.
 
+```{r}
+
+
+```
+
+
+
+
+
+
+
+Since majority of the data are complete as at 2018, we will only consider analysis on the data from 1999 to 2018, and then separately with life satisfaction from 2011 to 2018. 
+
+Create 2 additional columns. 
+Population density = Population size / Area size
+Number of houses 
 
 Insights
 
