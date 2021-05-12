@@ -214,7 +214,9 @@ For the other missing variables, we make the following observations:
 * median salary is populated since 1999
 
 
-```{r}
+```{r, include = FALSE}
+#don't need to include the output from here
+
 #need the dplyr for data manipulation
 #install.packages("dplyr")
 library(dplyr)
@@ -238,7 +240,7 @@ data_yearly %>%
         median_salary = impute_mean(median_salary)
     )
 
-
+as.data.frame(data_yearly)
 ```
 
 The following data manipulations are performed to the yearly data:
@@ -259,14 +261,14 @@ The variable we are interested in predicting is the "average house price", which
 ```{r}
 
 #checking that the number of observations are truly unique in the yearly data
-cat("number of unique rows in yearly data = ", nrow(unique(data_yearly[c("year","month","area")])), "\n") #693 rows, so yes, all year/month/area is unique
+#cat("number of unique rows in yearly data = ", nrow(unique(data_yearly[c("year","month","area")])), "\n") #693 rows, so yes, all year/month/area is unique
 
 #use left join to join the monthly data onto the yearly data
 #join on year, month, and area
 data_final <- left_join(data_yearly, data_monthly, by = c("year", "month", "area"))
 
 #do the same check for unique values in final dataset after join
-cat("number of unique rows in final data = ", nrow(unique(data_yearly[c("year","month","area")])), "\n")
+#cat("number of unique rows in final data = ", nrow(unique(data_final[c("year","month","area")])), "\n")
 
 ```
 A preview of the final data table is shown below.
@@ -312,10 +314,7 @@ print(unique((data_final$area)))
 ```
 The graph below shows how average house prices have changed from 1999 to 2019.
 
-```{r}
 
-
-```
 
 
 
