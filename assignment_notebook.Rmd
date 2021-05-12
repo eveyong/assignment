@@ -213,7 +213,6 @@ data_yearly <- data_yearly_raw %>%
 #  mutate(number_of_jobs = ifelse(is.na(number_of_jobs), mean(number_of_jobs,na.rm=TRUE), number_of_jobs)) %>%
 #  mutate(no_of_houses = ifelse(is.na(no_of_houses), mean(no_of_houses,na.rm=TRUE), no_of_houses))
 
-
 ```
 
 The following data manipulations are performed to the yearly data:
@@ -228,10 +227,36 @@ miss_var_summary(data_yearly)
 ```
 ### Joining the two data files into one
 
+The variable we are interested in predicting is the "average house price", which is contained in the monthly data. However, there are more attributes in the yearly data, so the final data table should be the yearly data plus the attributes from the monthly data. The yearly data has 693 observations, made up of data from 33 boroughs over 21 years.
+
+```{r}
+
+#checking that the number of observations are truly unique in the yearly data
+cat("number of unique rows in yearly data = ", nrow(unique(data_yearly[c("year","month","area")])), "\n") #693 rows, so yes, all year/month/area is unique
+
+#use left join to join the monthly data onto the yearly data
+#join on year, month, and area
+data_final <- left_join(data_yearly, data_monthly, by = c("year", "month", "area"))
+
+#do the same check for unique values in final dataset after join
+cat("number of unique rows in final data = ", nrow(unique(data_yearly[c("year","month","area")])), "\n")
+
+```
+A preview of the final data table is shown below.
+
+```{r}
+head(data_final)
+```
 
 
 \newpage
 ## Exploratory Data Analysis
+
+
+```{r}
+print(unique((data_final$area)))
+
+```
 
 
 Insights
