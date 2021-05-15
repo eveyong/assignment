@@ -315,7 +315,8 @@ print(unique((data_join$area)))
 
 The graph below shows how average house prices have changed from 1999 to 2019. Average house prices have increased for all areas in general, although some areas have had more dramatic increases compared to others. There is a slight dip in average house prices around 2008/2009, which could be due to the GFC. An indicator that is closely related to the GFC is mean and median salary. We will have a look at the correlation of salary with average house prices later on.
 
-```{r, echo=TRUE, fig.height=5, fig.width=10}
+```{r}
+
 data_join %>% 
   ggplot(aes(year,average_price, col=area)) +
   geom_line() +
@@ -346,7 +347,7 @@ data_join %>%
 
 The diagram below shows that Kensington and Chelsea and Westminister have the highest average house prices in London, followed by Camden, Hammersmith, and London. Area seems to be a strong indicator to whether the average house price is high or not.
 
-```{r, echo=TRUE, fig.height=6 fig.width=12}
+```{r}
 
 #install.packages("scales")
 library(scales)
@@ -382,13 +383,9 @@ We know that area (i.e. location of the house) is a very important factor. Howev
 * percentage of recylcing is a proxy for social policy
 
 
-_Location_ (and the above attributes) drive the demand for housing in a particular area, and therefore the average house price.
+_Location_ (and the above attributes) drive the demand for housing in a particular area, and therefore the average house price. The map below demonstrates the importance of locatio - areas around Kensington and Chelsea have higher average house prices than the ones further away.
 
-To help us figure out which attributes are most important, and therefore predict the average house price, the following factors are introduced:
-* distance from CBD (from new dataset)
-* population density (population size divided by area size)
-
-```{r}
+```{r, include = FALSE}
 
 #installing packages required for showing map 
 
@@ -397,21 +394,50 @@ To help us figure out which attributes are most important, and therefore predict
 #install.packages("raster")
 #install.packages("spData")
 #install.packages("spDataLarge", repos = "https://nowosad.github.io/drat/", type = "source")
-
+#install.packages("rgdal")
+library(tidyverse)
+library(rgdal)
 library(spData)
 library(tmap)
 library(sf)
 library(spData)
 library(spDataLarge)
-library(tidyverse)
+library(raster)
 
+london <- readOGR("1_data/London_Borough_Excluding_MHW/London_Borough_Excluding_MHW.shp")
+view(london)
 
+#could not use join function so use merge function  
+#right_join(data_join %>% dplyr::select(average_price), london, by = "GSS_CODE")
+data_join_map <- merge(london,
+                       data_join %>% dplyr::select(code.x, average_price, year) %>% dplyr::filter(year==2018), #get one year's data 2018, to represent the typical average house price, otherwise there will be non unique values
+                       by.x="GSS_CODE",
+                        by.y="code.x")
 
-#tm_shape(london) +
- # tm_fill() +
-#  tm_borders() 
+view(data_join_map)
 
 ```
+
+```{r}
+#install.library("RColourBrewer")
+library(RColorBrewer)
+
+my.palette <- brewer.pal(n = 9, name = "Reds") #creates colour template
+
+spplot(data_join_map, "average_price",
+       col.regions = my.palette,
+       cuts = 8,
+       main = "Greater London Area",
+       sub = "Average House Price")
+       
+```
+
+To help us figure out which attributes are most important, and therefore predict the average house price, the following factors are introduced:
+* distance from CBD (from new dataset)
+* population density (population size divided by area size)
+
+
+
 
 
 
@@ -427,7 +453,7 @@ Insights
 #need the corrplot package for correlation visualisation
 #install.packages("corrplot")
 library(corrplot)
-
+library(dplyr)
 #first need to get out the numerical variables only
 data_corr <- data_join %>% 
   filter(year>2001, year<2019) %>% 
@@ -442,7 +468,7 @@ data_corr <- data_join %>%
          no_of_crimes = as.numeric(no_of_crimes), 
          no_of_houses = as.numeric(no_of_houses),
          houses_sold = as.numeric(houses_sold)) %>%
-  select(average_price, 
+  dplyr::select(average_price, 
          median_salary, 
          mean_salary,
          life_satisfaction, 
