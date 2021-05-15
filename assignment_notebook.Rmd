@@ -265,7 +265,7 @@ The variable we are interested in predicting is the "average house price", which
 
 #use left join to join the monthly data onto the yearly data
 #join on year, month, and area
-data_final <- left_join(data_yearly, data_monthly, by = c("year", "month", "area"))
+data_join <- left_join(data_yearly, data_monthly, by = c("year", "month", "area"))
 
 #do the same check for unique values in final dataset after join
 #cat("number of unique rows in final data = ", nrow(unique(data_final[c("year","month","area")])), "\n")
@@ -274,7 +274,7 @@ data_final <- left_join(data_yearly, data_monthly, by = c("year", "month", "area
 A preview of the final data table is shown below.
 
 ```{r}
-head(data_final)
+head(data_join)
 ```
 
 
@@ -308,27 +308,62 @@ tab
 ```
 The 33 boroughs are shown below. 
 
-```{r}
-print(unique((data_final$area)))
+```{r, include=FALSE}
+print(unique((data_join$area)))
 
 ```
-The graph below shows how average house prices have changed from 1999 to 2019.
+
+The graph below shows how average house prices have changed from 1999 to 2019. Average house prices have increased for all areas in general, although some areas have had more dramatic increases compared to others. There is a slight dip in average house prices around 2008/2009, which could be due to the GFC. An indicator that is closely related to the GFC is mean and median salary. We will have a look at the correlation of salary with average house prices later on.
+
+```{r, echo=TRUE, fig.height=5, fig.width=10}
+data_join %>% 
+  ggplot(aes(year,average_price, col=area)) +
+  geom_line() +
+  theme(legend.position = "bottom") + 
+  theme(legend.key.height = unit(0.3, "cm")) +
+  theme(plot.title = element_text(face="bold", hjust=0.5)) +
+  theme(plot.subtitle = element_text(hjust=0.5)) +
+  theme(plot.margin=unit(c(0.2,0.5,0.1,0.5),"cm")) +
+  labs(title="Average House Prices from 1999 to 2019 by Area", subtitle = "Overall increase except in year 2008", x ="Year", y="Average house price (£)") +
+  scale_y_continuous(
+  labels = scales::comma_format(big.mark = ',',
+                                decimal.mark = '.')) +
+  scale_x_continuous(breaks = c(1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019)) +
+  geom_vline(xintercept=2008, linetype = "dashed", col = "black")
+
+  
+```
 
 
+```{r, include = FALSE}
 
+data_join %>% 
+  ggplot(aes(year,average_price, col = area)) +
+  geom_line(show.legend = FALSE) +
+  facet_wrap(~ area)
 
+```
 
+The diagram below shows that Kensington and Chelsea and Westminister have the highest average house prices in London, followed by Camden, Hammersmith, and London. Area seems to be a strong indicator to whether the average house price is high or not.
 
+```{r, echo=TRUE, fig.height=6 fig.width=12}
 
-
-
-Since majority of the data are complete as at 2018, we will only consider analysis on the data from 1999 to 2018, and then separately with life satisfaction from 2011 to 2018. 
-
-Create 2 additional columns. 
-Population density = Population size / Area size
-Number of houses 
-
-Insights
+#install.packages("scales")
+library(scales)
+data_join %>% 
+  ggplot(aes(x=reorder(area, -average_price), y=average_price, col = area)) +
+  #ggplot(aes(x=area, y=average_price, col = area)) +
+  geom_boxplot(show.legend = FALSE) +
+  theme(axis.text.x = element_text(angle=90, hjust=1)) +
+  theme(plot.title = element_text(face="bold", hjust=0.5)) +
+  theme(plot.subtitle = element_text(hjust=0.5)) +
+  theme(plot.margin=unit(c(0.2,0.5,0.1,0.5),"cm")) +
+  labs(title="Distribution of average house prices", subtitle = "How are average prices different in each area?", x ="Area", y="Average house price (£)") +
+  scale_y_continuous(
+  labels = scales::comma_format(big.mark = ',',
+                                decimal.mark = '.'))
+  
+```
 
 
 
@@ -338,11 +373,140 @@ Insights
 \newpage
 ## Factors Contributing to House Prices
 
+<Refine my question>
+
+We know that area (i.e. location of the house) is a very important factor. However, area or location is not an attribute on its own, but rather the makeup of several attributes in the data. For example:
+* number of crimes is a proxy for safety, 
+* median and mean salary is a proxy for income and income inequality
+* population size and area size is a proxy for population density
+* percentage of recylcing is a proxy for social policy
+
+
+_Location_ (and the above attributes) drive the demand for housing in a particular area, and therefore the average house price.
+
+To help us figure out which attributes are most important, and therefore predict the average house price, the following factors are introduced:
+* distance from CBD (from new dataset)
+* population density (population size divided by area size)
+
+```{r}
+
+#installing packages required for showing map 
+
+#install.packages("tmap")
+#install.packages("sf")
+#install.packages("raster")
+#install.packages("spData")
+#install.packages("spDataLarge", repos = "https://nowosad.github.io/drat/", type = "source")
+
+library(spData)
+library(tmap)
+library(sf)
+library(spData)
+library(spDataLarge)
+library(tidyverse)
+
+
+
+#tm_shape(london) +
+ # tm_fill() +
+#  tm_borders() 
+
+```
+
+
+
+Since majority of the data are complete as at 2018, we will only consider analysis on the data from 1999 to 2018, and then separately with life satisfaction from 2011 to 2018. 
+
+
+
+
+Insights
+
+
+```{r, include=FALSE}
+#need the corrplot package for correlation visualisation
+#install.packages("corrplot")
+library(corrplot)
+
+#first need to get out the numerical variables only
+data_corr <- data_join %>% 
+  filter(year>2001, year<2019) %>% 
+  mutate(average_price = as.numeric(average_price), 
+         median_salary = as.numeric(median_salary), 
+         mean_salary = as.numeric(mean_salary),
+         life_satisfaction = as.numeric(life_satisfaction), 
+         recycling_pct = as.numeric(recycling_pct), 
+         population_size = as.numeric(population_size), 
+         number_of_jobs = as.numeric(number_of_jobs), 
+         area_size = as.numeric(area_size), 
+         no_of_crimes = as.numeric(no_of_crimes), 
+         no_of_houses = as.numeric(no_of_houses),
+         houses_sold = as.numeric(houses_sold)) %>%
+  select(average_price, 
+         median_salary, 
+         mean_salary,
+         life_satisfaction, 
+         recycling_pct, 
+         population_size, 
+         number_of_jobs, 
+         area_size, 
+         no_of_crimes, 
+         no_of_houses,
+         houses_sold) 
+
+str(data_corr) #all numerical
+miss_var_summary(data_corr) #need to remove the missing values otherwise correlation matrix does not work
+
+#since there are not many (only 8) missing, we remove the NAs
+
+data_corr_complete <- na.omit(data_corr)
+corr <- cor(data_corr_complete)
+
+
+```
+
+
+```{r}
+#combine the correlation matrix with significance test
+#install.packages("Hmisc")
+library(Hmisc)
+cor_5 <- rcorr(as.matrix(data_corr_complete))
+M <- cor_5$r 
+p_mat <- cor_5$P #p-value
+
+#then plot the correlation matrix
+
+corrplot(M, method = "circle", type = "lower",  #type of correlation visualisation, only want one half of it
+         tl.col = "darkblue", tl.srt = 65, #change colour of text and slant it
+         tl.cex = 0.7, cl.cex = 0.7,
+         p.mat = p_mat, sig.level = 0.001, insig = "blank", #remove those insignificant ones, use 0.001 as the level of significance 
+         mar=c(0,0,3,0),
+         title = "How do the variables relate average house price and each other?")
+
+```
+From the correlation matrix above, we make the following observations:
+* Average price is positively correlated with salary, number of jobs, life satisfaction (unsurprising);
+* Number of jobs in the area also increase the average house price (possibly because commute is convenient);
+* Number of crimes increase where there is higher number of jobs so average house prices also increase where there are higher number of crime; and
+* Average house price is lower when population size and area size are bigger. Area size is negatively correlated with number of jobs, which implies that these areas have large lands, but fewer job opportunities, hence lower average house prices.
+
+
+
 ### Modelling 1
 
 
 
 ### Modelling 2
+The following correlation plot shows that:
+XXXXXXXXXXX
+
+
+
+
+
+
+
+
 
 
 \newpage
