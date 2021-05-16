@@ -509,7 +509,7 @@ From the correlation matrix above, we make the following observations:
 
 ### Train and test data
 
-We first split the data into train and test data using a 70%/30% split.
+We first split the data into train and test data using a 90%/10% split.
 
 ```{r, include = FALSE}
 
@@ -550,7 +550,7 @@ view(miss_var_summary(data_NN_complete))
 set.seed(101) #to fix the randomness
 
 #set 70% for train 30% for test
-trainsampleindex <- sample(1:nrow(data_NN_complete), 0.7*nrow(data_NN_complete))
+trainsampleindex <- sample(1:nrow(data_NN_complete), 0.9*nrow(data_NN_complete))
 
 #create the train and test below
 train <- data_NN_complete[trainsampleindex,]
@@ -588,19 +588,29 @@ train %>% ggplot(aes(average_price)) +
 
   
 ```
-Therefore we normalise the features in the training data before applying any model fit to it.
+Therefore we scale the features in the training data before applying any model fit to it.
 
 ```{r}
 
+#we need to scale data
+max.value <- apply(data_NN_complete, 2, max) 
+min.value <- apply(data_NN_complete, 2, min)
 
-train_scaled <- scale(train)
+#scale inputs and output to [0,1] intervals using min and max
+scaled <- as.data.frame(scale(data_NN_complete, center = min.value, scale = max.value - min.value)) 
 
+train_scaled <- scaled[trainsampleindex,]
+test_scaled <- scaled[-trainsampleindex,]
+
+####
+### this normal scaling is not used now
+#train_scaled <- scale(train)
 #Use means and standard deviations from training set to normalize test set
-col_means_train_scaled <- attr(train_scaled, "scaled:center") 
-col_stddevs_train_scaled <- attr(train_scaled, "scaled:scale")
+#col_means_train_scaled <- attr(train_scaled, "scaled:center") 
+#col_stddevs_train_scaled <- attr(train_scaled, "scaled:scale")
 
-test_scaled <- as.data.frame(scale(test, center = col_means_train_scaled, scale = col_stddevs_train_scaled))
-train_scaled <- as.data.frame(scale(train, center = col_means_train_scaled, scale = col_stddevs_train_scaled))
+#test_scaled <- as.data.frame(scale(test, center = col_means_train_scaled, scale = col_stddevs_train_scaled))
+#train_scaled <- as.data.frame(scale(train, center = col_means_train_scaled, scale = col_stddevs_train_scaled))
 
 
 ```
@@ -614,7 +624,7 @@ library(neuralnet)
 set.seed(180)
 n <- names(train_scaled)
 f <- as.formula(paste("average_price ~", paste(n[!n %in% "average_price"], collapse = " + ")))
-nn <- neuralnet(f,data=train_scaled, hidden=c(4,2),act.fct = 'tanh',linear.output=T, stepmax=1e7)
+nn <- neuralnet(f,data=train_scaled, hidden=c(6,4),act.fct = 'tanh',linear.output=T, stepmax=1e7)
 
 plot(nn)
 
@@ -622,18 +632,309 @@ plot(nn)
 
 ```{r}
 
+#rescaling should be in reference to the mean and std dev i.e. the min and max
 pr.nn <- compute(nn, test_scaled[,1:10])
-pr.nn.rescaled <- pr.nn$net.result * (max(data_NN_complete$average_price)-min(data_NN_complete$average_price)) + min(data_NN_complete$average_price)
-test.rescaled <- test_scaled$average_price * (max(data_NN_complete$average_price)-min(data_NN_complete$average_price)) + min(data_NN_complete$average_price)
+pr.nn.rescaled <- pr.nn$net.result * 
+  (max(data_NN_complete$average_price)-min(data_NN_complete$average_price)) + min(data_NN_complete$average_price)
+test.rescaled <- test_scaled$average_price * 
+  (max(data_NN_complete$average_price)-min(data_NN_complete$average_price)) + min(data_NN_complete$average_price)
 
-
+#plotting the predicted NN with the test data
 par(mfrow=c(1,2))
-plot(test$average_price,pr.nn.rescaled,col='red',main='predicted NN vs real',pch=18,cex=0.7)
+plot(test$average_price,pr.nn.rescaled,col='red',main='predicted NN vs real',pch=18,cex=0.7, xlab = "Average house price (£)", ylab = "Predicted")
 abline(0,1,lwd=2)
+legend('bottomright',legend='NN',pch=18,col='red', bty='n')
+
+
+```
+```{r}
+#calculating the MSE for the NN
+MSE.nn <- sum((test.rescaled - pr.nn.rescaled)^2)/nrow(test_scaled)
+cat("MSE for NN model =", MSE.nn, "\n")
 
 ```
 
+```{r}
 
+#use a GLM for comparison against the NN
+library(boot)
+set.seed(2)
+
+lm.fit <- glm(average_price~., data=train)
+lm.pred <- predict(lm.fit, test)
+summary(lm.fit)
+
+```
+
+```{r}
+#to calculate pseudo R square for comparison with the NN
+#install.packages("rcompanion")
+library(rcompanion)
+nagelkerke(lm.fit)
+```
+
+
+
+```{r}
+
+MSE.lm <- sum((lm.pred - test$average_price)^2)/nrow(test)
+cat("MSE for linear model =", MSE.lm, "\n")
+
+lm.fullfit <- glm(average_price~.,data=data_NN_complete)
+cat("10 fold cross valiation error for GLM =", cv.glm(data_NN_complete,lm.fullfit,K=10)$delta[1], "\n")
+
+```
+```{r}
+#plot both of the NN and GLM predicted results versus the real
+plot(test$average_price,pr.nn.rescaled,col='red',main='Predicted vs Real for NN and GLM',pch=18,cex=0.7, xlab = "Average house price (£)", ylab = "Predicted")
+points(test$average_price,lm.pred,col='blue',pch=18,cex=0.7)
+abline(0,1,lwd=2)
+legend('bottomright',legend=c('NN','GLM'),pch=18,col=c('red','blue'))
+
+```
+
+```{r}
+
+set.seed(450)
+cv.error <- NULL
+k <- 10
+library(plyr) 
+pbar <- create_progress_bar('text')
+pbar$init(k)
+for(i in 1:k){
+    index <- sample(1:nrow(data_NN_complete),round(0.9*nrow(data_NN_complete)))
+    train.cv <- scaled[index,]
+    test.cv <- scaled[-index,]
+    nn <- neuralnet(f,data=train.cv,hidden=c(6,4),linear.output=T)   
+    pr.nn <- compute(nn,test.cv[,1:10])
+    pr.nn <- pr.nn$net.result*(max(data_NN_complete$average_price)-min(data_NN_complete$average_price))+min(data_NN_complete$average_price)   
+    test.cv.r <- (test.cv$average_price)*(max(data_NN_complete$average_price)-min(data_NN_complete$average_price))+min(data_NN_complete$average_price)   
+    cv.error[i] <- sum((test.cv.r - pr.nn)^2)/nrow(test.cv)    
+    pbar$step()
+}
+
+```
+```{r}
+
+cat("NN cross validation error =", cv.error, "\n")
+cat("Mean NN cross validation error =", mean(cv.error), "\n")
+
+```
+```{r}
+boxplot(cv.error,xlab='MSE CV',col='light green',
+        border='black',names="CV error (MSE)",
+        main ="CV error (MSE) for NN",horizontal=TRUE) 
+
+```
+Mean CV error for NN is 6bn, which is lower than GLM CV error, 17bn, although there seems to be a certain degree of variation in the MSEs of the cross validation. MSE for the NN machine learning applied in our model was 3bn compared to GLM's MSE of 10bn. This shows that the neural network was a better predictor of average house prices compared to GLM.
+
+We look at another model to see if it is a better fit.
+
+
+### Modelling 2
+
+
+Decision trees or regression trees are also machine learning models that can be used to predict continuous variables like average house prices.
+
+```{r}
+require(rpart)
+require(rpart.plot)
+
+#prepare the data for tree regression, using the same data_join set
+#no need to remove the life satisfaction because NAs will not stop the tree process
+#see if this is a better fit compared to the previous NN
+data_tree <- data_join %>% 
+  filter(year>2000, year<2019) %>% 
+  mutate(average_price = as.numeric(average_price), 
+         median_salary = as.numeric(median_salary), 
+         mean_salary = as.numeric(mean_salary),
+         life_satisfaction = as.numeric(life_satisfaction), 
+         recycling_pct = as.numeric(recycling_pct), 
+         population_size = as.numeric(population_size), 
+         number_of_jobs = as.numeric(number_of_jobs), 
+         area_size = as.numeric(area_size), 
+         no_of_crimes = as.numeric(no_of_crimes), 
+         no_of_houses = as.numeric(no_of_houses),
+         houses_sold = as.numeric(houses_sold)) %>%
+  dplyr::select(average_price, 
+         median_salary, 
+         mean_salary,
+         life_satisfaction, 
+         recycling_pct, 
+         population_size, 
+         number_of_jobs, 
+         area_size, 
+         no_of_crimes, 
+         no_of_houses,
+         houses_sold) 
+
+set.seed(1080) #to fix the randomness
+
+#set 90% for train 10% for test
+trainsampleindex_tree <- sample(1:nrow(data_tree), 0.9*nrow(data_tree))
+
+#create the train and test below
+train_tree <- data_tree[trainsampleindex_tree,]
+test_tree <- data_tree[-trainsampleindex_tree,]
+
+```
+
+```{r}
+#start with a big tree and prune later
+tree <- rpart(average_price ~ .,
+                         data=train_tree,
+                         method="anova", #not Poisson nor discrete so choose anova
+                         control = rpart.control(xval=10,cp=0.0000001))
+rpart.plot(tree)
+
+```
+```{r}
+#introduce new function for calculating MSE for regression tree
+rmse_reg <- function(model_obj, testing = NULL, target = NULL) {
+  #Calculates rmse for a regression decision tree
+  #Arguments:
+    # testing - test data set
+    # target  - target variable (length 1 character vector)
+  yhat <- predict(model_obj, newdata = test_tree)
+  actual <- testing[[target]]
+  sqrt(mean((yhat-actual)^2))
+}
+```
+
+```{r}
+cat("MSE of regression tree =", rmse_reg(tree, test_tree, "average_price")^2, "\n")
+```
+
+If we grow an overly complex tree as in the tree diagram above, there tends to be overfitting to the training data, which results in poor generalisation performance.
+
+To find the balance of depth and complexity of the tree, there are two approaches - pruning and early stopping.
+
+We explore the pruning option below.
+
+```{r}
+#find the optimal cp value using the plot below
+
+plotcp(tree,minline=TRUE,
+       col = "red")
+```
+From the above diagram, we can see optimal complexity parameter is roughly 0.007. We prune the tree to return a smaller optimal tree. We calculate the optimal complexity parameter by using the 1SD rule as well to double check.
+
+```{r}
+cp.select <- function(big.tree){
+  min.x <- which.min(big.tree$cptable[, 4])
+  for(i in 1:nrow(big.tree$cptable)){
+    if(big.tree$cptable[i, 4] < big.tree$cptable[min.x, 4] 
+       + big.tree$cptable[min.x, 5]){
+      return(big.tree$cptable[i, 1])
+    }
+  }
+}
+CP_select <- cp.select(tree)
+cat("Optimal complexity parameter = ", CP_select, "\n")
+```
+
+```{r}
+tree_pruned <- prune(tree, cp = CP_select)
+rpart.plot(tree_pruned)
+```
+
+```{r}
+
+yhat <- predict(tree_pruned, newdata = test_tree)
+actual <- test_tree$average_price
+plot(yhat, actual, xlab = "Predicted", ylab = "Actual", main = "Predicted vs Actual")
+abline(0,1)
+
+```
+
+```{r}
+#previously using this, use the next one to calculate sq root of MSE instead
+#cat("MSE of tree_pruned =", sum(((yhat-actual)^2))/nrow(test_tree), "\n")
+
+
+#calculate and print the MSE for tree after pruning
+cat("MSE of regression tree after pruning =", rmse_reg(tree_pruned, test_tree, "average_price")^2, "\n")
+```
+
+The MSE is slightly higher than the previous tree, but still higher than that of the neural network model, which was 3bn. 
+
+We use the CARET package to train the tree data to find the best fit using the minimum of RMSE.
+
+```{r}
+
+#need CARET package for traincontrol function
+#install.packages("caret")
+library(caret)
+
+trgrid <- expand.grid(cp = seq(0,0.4,0.01))
+tc <- trainControl("cv",10)
+set.seed(2)
+train.rpart <- caret::train(x = train_tree[,-"average_price"], #caret:: because of mlr conflict and me using same object name
+                     y = train_tree$average_price,
+                     method = "rpart",
+                     tuneLength = 50,
+                     trControl = tc,
+                     tuneGrid = trgrid )
+train.rpart
+
+```
+
+We calculate the MSE using CARET
+```{r}
+rmse_reg(train.rpart, test_tree, "average_price")^2
+```
+The MSE has greatly reduced to less than 1bn, even more effective than the previous NN model.
+
+However, the diagram below shows that there are many leaves compared to the unpruned tree.
+
+```{r}
+
+require(rpart.plot)
+rpart.plot(train.rpart$finalModel)
+
+```
+The new model resulted in a very large tree as pictured above. There is very high chance that it is overfitting the model.
+
+The plot below shows the predicted versus actual average house prices using the CARET tree model. While it reduces the MSE drastically, it is not recommended to use this approach for predicting average house prices.
+
+```{r}
+yhat2 <- predict(train.rpart$finalModel, newdata = test_tree)
+actual2 <- test_tree$average_price
+plot(yhat2, actual2, xlab = "Predicted", ylab = "Actual", main = "Predicted vs Actual")
+abline(0,1)
+```
+
+
+
+
+\newpage
+## Evaluation of Models
+
+
+
+
+
+\newpage
+## Conclusion
+
+
+
+
+\newpage
+## Limitations and Potential Future Work
+
+
+\newpage
+## Appendices
+
+```{r ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE}
+```
+
+
+to delete after?
+To help us figure out which attributes are most important, and therefore predict the average house price, the following factors are introduced:
+* distance from CBD (from new dataset)
+* population density (population size divided by area size)
 
 ```{r, warning = FALSE}
 
@@ -688,48 +989,48 @@ history <- model %>% fit(
 )
 ```
 
+```{r}
+#predict tree to the train and test datasets
 
-The method of error 
-cross validation
+train_tree$fit <- train_tree$average_price*predict(tree_pruned)
+test_tree$fit <- test_tree$average_price*predict(tree_pruned, newdata=test_tree)
 
-### Modelling 2
-The following correlation plot shows that:
-XXXXXXXXXXX
+#calculate in sample and our of sample error based on deviance loss function
+in_sample_err<-2*(sum((train_tree$average_price/train_tree$fit))-sum(train_tree$average_price)+sum(train_tree$fit))/nrow(train_tree)
+out_sample_err<-2*(sum((test_tree$average_price/test_tree$fit))-sum(test_tree$average_price)+sum(test_tree$fit))/nrow(test_tree)
 
+cat("in-sample error using deviance loss fuction =", in_sample_err, "\n")
+cat("out-of-sample error using deviance loss function =", out_sample_err, "\n")
 
-
-
-
-
-
-
-
-
-\newpage
-## Evaluation of Models
-
-
-
-
-
-\newpage
-## Conclusion
-
-
-
-
-\newpage
-## Limitations and Potential Future Work
-
-
-\newpage
-## Appendices
-
-```{r ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE}
 ```
 
+```{r}
+train_tree$fit<-train_tree$fit*predict(boosting.step)^shrinkage
+    test_tree$fit<-test_tree$fit*predict(boosting.step, newdata=test_tree)^shrinkage
 
-to delete after?
-To help us figure out which attributes are most important, and therefore predict the average house price, the following factors are introduced:
-* distance from CBD (from new dataset)
-* population density (population size divided by area size)
+    in_sample_error[k]<-2*(sum((train_tree$average_price/train_tree$fit))-sum(train_tree$average_price)+sum(train_tree$fit))/nrow(train_tree)
+    out_sample_error[k]<-2*(sum((test_tree$average_price/test_tree$fit))-sum(test_tree$average_price)+sum(test_tree$fit))/nrow(test_tree)
+```
+
+```{r}
+#perform boosting machine with SBS tree with K=2 leaves only
+idepth<-30
+K<-50 #number of iterations
+
+rmse_reg_err <- vector()
+
+for(k in 1:K){
+    boosting.step <- rpart(average_price ~ .,
+                         data=train_tree,
+                         method="anova", #not Poisson nor discrete so choose anova
+                         control = rpart.control(maxsurrogate=0, xval=1,cp=0.007,maxdepth=idepth))
+    
+    rmse_reg_err[k] <- rmse_reg(boosting.step, test_tree, "average_price")^2
+    
+}
+
+par(mfrow=c(1,2))
+plot(seq(1:K),rmse_reg_err, xlab="iteration", ylab="MSE")
+
+
+```
