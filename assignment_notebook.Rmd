@@ -27,6 +27,7 @@ library(knitr)
 knitr::opts_chunk$set(echo=FALSE, warning=FALSE, message=FALSE)
 
 ```
+
 \newpage
 
 ## Introduction
@@ -43,7 +44,7 @@ The report includes:
 * Data exploration and visualisation
 * Modelling, prediction, and evaluation
 * Conclusion
-* R code in the appendices
+* Appendix for R code
 
 ## Data Cleaning and Preparation
 
@@ -57,18 +58,12 @@ rm(list=ls())
 #importing the data from monthly file first
 data_monthly_raw <- read.csv("1_data/housing_in_london_monthly_variables.csv", sep = ",", header = TRUE)
 
-library(knitr)
-library(kableExtra)
 str(data_monthly_raw)
 
 ```
 ```{r}
 #pushing this to a separate r line because it could not fit the frame with the structure above
-library(knitr)
-library(kableExtra)
-knitr::kable(head(data_monthly_raw)) %>%
-  kable_styling(latex_options = c("striped", "scale_down"),
-                font_size = 10)
+head(data_monthly_raw)
 
 ```
 
@@ -84,12 +79,7 @@ Checking for missing values.
 
 #install.packages("naniar")
 library(naniar)
-
-library(knitr)
-library(kableExtra)
-knitr::kable(miss_var_summary(data_monthly_raw)) %>%
-  kable_styling(latex_options = c("striped", "scale_down"),
-                font_size = 10)
+miss_var_summary(data_monthly_raw))
 
 ```
 
@@ -159,9 +149,7 @@ The yearly data is more generous, it contains more factors that could contribute
  
 library(knitr)
 library(kableExtra)
-knitr::kable(miss_var_summary(data_yearly_raw)) %>%
-  kable_styling(latex_options = c("striped", "scale_down"),
-                font_size = 10)
+miss_var_summary(data_yearly_raw)
 ```
 Like the monthly data, there seems to be some missing variables in the yearly data, most of which can be manipulated to populate some data. The field "life satisfaction" is almost 70% missing from the data, so we might choose to drop that field altogether. Before we do that, we look at the distribution of life satisfaction, area size, number of houses, and number of jobs to see why there are so many missing values.
 
@@ -297,12 +285,7 @@ data_join <- left_join(data_yearly, data_monthly, by = c("year", "month", "area"
 A preview of the final data table is shown below.
 
 ```{r}
-library(knitr)
-library(kableExtra)
-knitr::kable(head(data_join)) %>%
-  kable_styling(latex_options = c("striped", "scale_down"),
-                font_size = 10)
-
+head(data_join)
 ```
 
 
@@ -331,11 +314,7 @@ rownames(tab) <- c("1.", "2.", "3.", "4.", "5.", "6.", "7.", "8.", "9.")
 tab <- as.table(tab)
 
 #view table 
-knitr::kable(tab) %>%
-  kable_styling(latex_options = c("striped", "scale_down"),
-                position = "center",
-                font_size = 12)
-
+tab
 ```
 The 33 boroughs are shown below. 
 
@@ -534,9 +513,7 @@ From the correlation matrix above, we make the following observations:
 * Number of crimes increase where there is higher number of jobs so average house prices also increase where there are higher number of crime; and
 * Average house price is lower when population size and area size are bigger. Area size is negatively correlated with number of jobs, which implies that these areas have large lands, but fewer job opportunities, hence lower average house prices.
 
-### Train and test data
-
-We first split the data into train and test data using a 90%/10% split.
+For our models, we split the data into train and test data using a 90%/10% split and make the variables numeric.
 
 ```{r, include = FALSE}
 
@@ -586,12 +563,6 @@ test <- data_NN_complete[-trainsampleindex,]
 
 ```
 
-
-
-
-
-Insights
-
 ### Modelling using Neural Network and Linear Models
 
 The first model chosen to fit the train data is a neural network (NN) model, which are nonlinear supervised regression models.
@@ -616,6 +587,8 @@ train %>% ggplot(aes(average_price)) +
   
 ```
 Therefore we scale the features in the training data before applying any model fit to it.
+
+The following diagram shows how a neural network with two hidden layers (6 and 4 nodes) predict the average house price.
 
 ```{r}
 
@@ -645,7 +618,7 @@ test_scaled <- scaled[-trainsampleindex,]
 ```{r}
 #install.packages("neuralnet")
 library(neuralnet)
-
+library(dplyr)
 #build a neural network
 
 set.seed(180)
@@ -653,9 +626,10 @@ n <- names(train_scaled)
 f <- as.formula(paste("average_price ~", paste(n[!n %in% "average_price"], collapse = " + ")))
 nn <- neuralnet(f,data=train_scaled, hidden=c(6,4),act.fct = 'tanh',linear.output=T, stepmax=1e7)
 
-plot(nn)
+plot(nn, rep="best")
 
 ```
+The diagram below shows how the NN model fits to its test data.
 
 ```{r}
 
@@ -684,8 +658,9 @@ MSE.nn <- sum((test.rescaled - pr.nn.rescaled)^2)/nrow(test_scaled)
 cat("RMSE for NN model =", sqrt(MSE.nn), "\n")
 
 ```
+We will try fitting the train data with a linear model to see how the NN compares.
 
-```{r}
+```{r, warning = FALSE}
 
 #use a GLM for comparison against the NN
 library(boot)
@@ -697,14 +672,13 @@ summary(lm.fit)
 
 ```
 
-```{r}
+```{r, include = FALSE}
 #to calculate pseudo R square for comparison with the NN
 #install.packages("rcompanion")
 library(rcompanion)
 nagelkerke(lm.fit)
 ```
-
-
+The linear model has a higher root mean square error compared to the NN model. This means the model accuracy is less so than the NN. We also show the cross validation error below so we can compare it to the NN. 
 
 ```{r}
 
@@ -766,10 +740,11 @@ The accuracy of model (proxied by root mean square error, RMSE) for the NN machi
 
 We look at another model to see if it is a better fit.
 
-
 ### Modelling using Decision Tree
 
 Decision trees or regression trees are also machine learning models that can be used to predict continuous variables like average house prices.
+
+We use the same joined data we produced after data preparation, but allow for the variable, life satisfaction, to be included. The decision tree model is less stringent than the NN model (which did not allow missing values), hence we decide to bring in life satisfaction to see if it makes the model more accurate.
 
 ```{r}
 require(rpart)
@@ -813,6 +788,7 @@ train_tree <- data_tree[trainsampleindex_tree,]
 test_tree <- data_tree[-trainsampleindex_tree,]
 
 ```
+The following is the first stab at the decision tree before any action to improve accuracy.
 
 ```{r}
 #start with a big tree and prune later
@@ -840,12 +816,9 @@ rmse_reg <- function(model_obj, testing = NULL, target = NULL) {
 ```{r}
 cat("RMSE of regression tree =", rmse_reg(tree, test_tree, "average_price"), "\n")
 ```
+If we grow an overly complex tree as in the tree diagram above, there tends to be overfitting to the training data, which results in poor generalisation performance. To find the balance of depth and complexity of the tree, there are two approaches - pruning and early stopping.
 
-If we grow an overly complex tree as in the tree diagram above, there tends to be overfitting to the training data, which results in poor generalisation performance.
-
-To find the balance of depth and complexity of the tree, there are two approaches - pruning and early stopping.
-
-We explore the pruning option below.
+We explore the pruning option. First, we find the optimal complexity parameter with the help of the chart below.
 
 ```{r}
 #find the optimal cp value using the plot below
@@ -853,7 +826,7 @@ We explore the pruning option below.
 plotcp(tree,minline=TRUE,
        col = "red")
 ```
-From the above diagram, we can see optimal complexity parameter is roughly 0.007. We prune the tree to return a smaller optimal tree. We calculate the optimal complexity parameter by using the 1SD rule as well to double check.
+From the above diagram, we can see optimal complexity parameter is roughly 0.01. We prune the tree to return a smaller optimal tree. We calculate the optimal complexity parameter by using the 1SD rule as well to double check.
 
 ```{r}
 cp.select <- function(big.tree){
@@ -868,12 +841,15 @@ cp.select <- function(big.tree){
 CP_select <- cp.select(tree)
 cat("Optimal complexity parameter = ", CP_select, "\n")
 ```
+The tree with the optimal cp value has fewer leaves now.
+It shows that salary information and number of jobs are the most influential predictors of average house price. This is a similar finindg with our correlation matrix from the previous section.
 
 ```{r}
 tree_pruned <- prune(tree, cp = CP_select)
 rpart.plot(tree_pruned,
            main = "Decision Tree after Pruning")
 ```
+The diagram below shows how well the pruned decision tree fits its test data. 
 
 ```{r dev = "png"}
 
@@ -900,7 +876,7 @@ The MSE is slightly higher than the previous tree, but still higher than that of
 
 We use the CARET package to train the tree data to find the best fit using the minimum of RMSE.
 
-```{r}
+```{r, warning = FALSE}
 
 #need CARET package for traincontrol function
 #install.packages("caret")
@@ -944,6 +920,7 @@ abline(0,1)
 ```
 
 \newpage
+
 ## Evaluation of Models
 
 The accuracy of the models (measured by root mean squared error) are summarised below:
@@ -963,12 +940,13 @@ Neural Network model did the best job in predicting average house prices in Lond
 ```{r}
 #reproducing the code used to produce NN predicted vs. real
 par(mfrow=c(1,2))
-plot(test$average_price,pr.nn.rescaled,col='red',main='Best Model: Predicted NN vs real',pch=18,cex=0.7, xlab = "Average house price (£)", ylab = "Predicted")
+plot(test$average_price,pr.nn.rescaled,col='red',main='Predicted NN vs real',pch=18,cex=0.7, xlab = "Average house price (£)", ylab = "Predicted")
 abline(0,1,lwd=2)
 legend('bottomright',legend='NN',pch=18,col='red', bty='n')
 
 ```
 \newpage
+
 ## Conclusion
 
 This report demonstrated how machine learning has applications in many fields, such as predicting the value of house prices for many interested parties like investors, banks, insurers, the government, and many more. Managing the risk of fluctuations in house prices helps manage the financial risks for these stakeholders due to their asset values, loan values, insurance payout (property losses), and affordability of house prices.
@@ -990,7 +968,6 @@ We then tried decision trees to see if they can predict better than NN and linea
 
 Finally, we tried letting the decision tree model streamline the model building and evaluation process (via the CARET package). Even though the resulted model accuracy was very low (lowest amongst all models), it was obvious that the model was over-fitted, which means that decision tree model learnt the training data too well and cannot generalise from data it has not seen before. We do not recommend using that decision tree model for predicting average house prices.
 
-\newpage
 ## Limitations and Potential Future Work
 
 The dataset is focused on London's average house prices within boroughs, with data quite heavily focused on financial propensity of an area e.g. salary and number of jobs. There is no data on the economic activity of London (e.g. GDP or interest rates) which could definitely influence average house prices too. 
@@ -1000,7 +977,7 @@ The analysis focused on whether average house prices can be predicted from exist
 The NN model was shown to be the best predictor amongst all the models explored in the report. It could be improved by using more layers and deeper layers, although it can become computationally very long and complex. 
 
 \newpage
-## Appendices
+## Appendix: R Code
 
 ```{r ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE}
 ```
