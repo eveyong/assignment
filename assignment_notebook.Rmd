@@ -325,6 +325,7 @@ data_join %>%
   theme(plot.title = element_text(face="bold", hjust=0.5)) +
   theme(plot.subtitle = element_text(hjust=0.5)) +
   theme(plot.margin=unit(c(0.2,0.5,0.1,0.5),"cm")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   labs(title="Average House Prices from 1999 to 2019 by Area", subtitle = "Overall increase except in year 2008", x ="Year", y="Average house price (£)") +
   scale_y_continuous(
   labels = scales::comma_format(big.mark = ',',
@@ -382,8 +383,7 @@ We know that area (i.e. location of the house) is a very important factor. Howev
 * population size and area size is a proxy for population density
 * percentage of recylcing is a proxy for social policy
 
-
-_Location_ (and the above attributes) drive the demand for housing in a particular area, and therefore the average house price. The map below demonstrates the importance of locatio - areas around Kensington and Chelsea have higher average house prices than the ones further away.
+_Location_ (and the above attributes) drive the demand for housing in a particular area, and therefore the average house price. The map below demonstrates the importance of location - areas around Kensington and Chelsea have higher average house prices than the ones further away.
 
 ```{r, include = FALSE}
 
@@ -395,13 +395,13 @@ _Location_ (and the above attributes) drive the demand for housing in a particul
 #install.packages("spData")
 #install.packages("spDataLarge", repos = "https://nowosad.github.io/drat/", type = "source")
 #install.packages("rgdal")
-library(tidyverse)
-library(rgdal)
-library(spData)
-library(tmap)
-library(sf)
-library(spData)
-library(spDataLarge)
+
+library(tidyverse) #for view function
+library(rgdal) #for reading geo file
+#library(spData) #geopackage file, but no longer needed because loaded London geo data separately
+library(tmap) #for plotting maps
+library(sf) #for plotting maps
+#library(spDataLarge) #geopackage file, but no longer needed because loaded London geo data separately
 library(raster)
 
 london <- readOGR("1_data/London_Borough_Excluding_MHW/London_Borough_Excluding_MHW.shp")
@@ -432,31 +432,21 @@ spplot(data_join_map, "average_price",
        
 ```
 
-To help us figure out which attributes are most important, and therefore predict the average house price, the following factors are introduced:
-* distance from CBD (from new dataset)
-* population density (population size divided by area size)
-
-
-
-
-
-
 Since majority of the data are complete as at 2018, we will only consider analysis on the data from 1999 to 2018, and then separately with life satisfaction from 2011 to 2018. 
-
-
-
-
-Insights
-
 
 ```{r, include=FALSE}
 #need the corrplot package for correlation visualisation
 #install.packages("corrplot")
-library(corrplot)
-library(dplyr)
+#install.packages("naniar")
+
+library(corrplot) #for correlation
+library(dplyr) #for mutate and select
+library(naniar) #for missing variable summary
+library(tidyverse) #for view function
+
 #first need to get out the numerical variables only
 data_corr <- data_join %>% 
-  filter(year>2001, year<2019) %>% 
+  filter(year>2010, year<2019) %>% 
   mutate(average_price = as.numeric(average_price), 
          median_salary = as.numeric(median_salary), 
          mean_salary = as.numeric(mean_salary),
@@ -481,13 +471,14 @@ data_corr <- data_join %>%
          houses_sold) 
 
 str(data_corr) #all numerical
-miss_var_summary(data_corr) #need to remove the missing values otherwise correlation matrix does not work
+view(miss_var_summary(data_corr)) #need to remove the missing values otherwise correlation matrix does not work
 
-#since there are not many (only 8) missing, we remove the NAs
-
+#since there are not many (only 10 rows) missing, we remove the NAs
 data_corr_complete <- na.omit(data_corr)
-corr <- cor(data_corr_complete)
+view(miss_var_summary(data_corr_complete)) #no missing variables
 
+#correlation matrix
+corr <- cor(data_corr_complete)
 
 ```
 
@@ -516,11 +507,190 @@ From the correlation matrix above, we make the following observations:
 * Number of crimes increase where there is higher number of jobs so average house prices also increase where there are higher number of crime; and
 * Average house price is lower when population size and area size are bigger. Area size is negatively correlated with number of jobs, which implies that these areas have large lands, but fewer job opportunities, hence lower average house prices.
 
+### Train and test data
 
+We first split the data into train and test data using a 70%/30% split.
+
+```{r, include = FALSE}
+
+#first separate out the factors used for analyses ane make them into numeric values
+#this is repeating the process used for correlation matrix
+#only use data between 2001 and 2018 because that is when most data is complete
+
+data_NN <- data_join %>% 
+  filter(year>2000, year<2019) %>% 
+  mutate(average_price = as.numeric(average_price), 
+         median_salary = as.numeric(median_salary), 
+         mean_salary = as.numeric(mean_salary),
+         #life_satisfaction = as.numeric(life_satisfaction), 
+         recycling_pct = as.numeric(recycling_pct), 
+         population_size = as.numeric(population_size), 
+         number_of_jobs = as.numeric(number_of_jobs), 
+         area_size = as.numeric(area_size), 
+         no_of_crimes = as.numeric(no_of_crimes), 
+         no_of_houses = as.numeric(no_of_houses),
+         houses_sold = as.numeric(houses_sold)) %>%
+  dplyr::select(average_price, 
+         median_salary, 
+         mean_salary,
+         #life_satisfaction, 
+         recycling_pct, 
+         population_size, 
+         number_of_jobs, 
+         area_size, 
+         no_of_crimes, 
+         no_of_houses,
+         houses_sold) 
+
+view(miss_var_summary(data_NN)) #some variables missing, remove them because there are not many
+data_NN_complete <- na.omit(data_NN) #remove NAs
+view(miss_var_summary(data_NN_complete)) 
+
+#now we split into train and test
+set.seed(101) #to fix the randomness
+
+#set 70% for train 30% for test
+trainsampleindex <- sample(1:nrow(data_NN_complete), 0.7*nrow(data_NN_complete))
+
+#create the train and test below
+train <- data_NN_complete[trainsampleindex,]
+test <- data_NN_complete[-trainsampleindex,]
+
+
+```
+
+
+
+
+
+Insights
 
 ### Modelling 1
 
+The first model chosen to fit the train data is a neural network (NN) model, which are nonlinear supervised regression models.
 
+We check to see the distribution of average house price in the training data. The diagram below shows that average house prices can have quite large scale and ranges, compared to the other attributes in the model.
+
+```{r}
+#plot histogram to see if we need to normalise the data first for NN
+
+train %>% ggplot(aes(average_price)) +
+  geom_density(fill="#69b3a2", color="#e9ecef", alpha=0.8) +
+  ggtitle("Average price distribution of London houses") +
+  theme(plot.title = element_text(size = 12, face = "bold", hjust = 0.5)) +
+  theme(plot.margin=unit(c(0.2,0.5,0.1,0.5),"cm")) +
+  labs(x = "Average House Price (£)", y = "Density") +
+  scale_x_continuous(breaks = c(250000, 500000, 750000, 1000000, 1250000, 1500000),
+                     labels = scales::comma_format(big.mark = ',',
+                                decimal.mark = '.')) + 
+  scale_y_continuous(labels = scales::number_format(accuracy = 0.000001,
+                                 decimal.mark = '.'))
+
+  
+```
+Therefore we normalise the features in the training data before applying any model fit to it.
+
+```{r}
+
+
+train_scaled <- scale(train)
+
+#Use means and standard deviations from training set to normalize test set
+col_means_train_scaled <- attr(train_scaled, "scaled:center") 
+col_stddevs_train_scaled <- attr(train_scaled, "scaled:scale")
+
+test_scaled <- as.data.frame(scale(test, center = col_means_train_scaled, scale = col_stddevs_train_scaled))
+train_scaled <- as.data.frame(scale(train, center = col_means_train_scaled, scale = col_stddevs_train_scaled))
+
+
+```
+
+```{r}
+#install.packages("neuralnet")
+library(neuralnet)
+
+#build a neural network
+
+set.seed(180)
+n <- names(train_scaled)
+f <- as.formula(paste("average_price ~", paste(n[!n %in% "average_price"], collapse = " + ")))
+nn <- neuralnet(f,data=train_scaled, hidden=c(4,2),act.fct = 'tanh',linear.output=T, stepmax=1e7)
+
+plot(nn)
+
+```
+
+```{r}
+
+pr.nn <- compute(nn, test_scaled[,1:10])
+pr.nn.rescaled <- pr.nn$net.result * (max(data_NN_complete$average_price)-min(data_NN_complete$average_price)) + min(data_NN_complete$average_price)
+test.rescaled <- test_scaled$average_price * (max(data_NN_complete$average_price)-min(data_NN_complete$average_price)) + min(data_NN_complete$average_price)
+
+
+par(mfrow=c(1,2))
+plot(test$average_price,pr.nn.rescaled,col='red',main='predicted NN vs real',pch=18,cex=0.7)
+abline(0,1,lwd=2)
+
+```
+
+
+
+```{r, warning = FALSE}
+
+#install.packages("keras")
+library(keras) 
+
+#build the model with two densely connected hidden layers with one single continuous layer as output
+#create function for the model
+build_model <- function() {
+  model <- keras_model_sequential() %>%
+    layer_dense(units = 64, activation = "relu",
+                input_shape = dim(train_scaled)[2]) %>%
+    layer_dense(units = 64, activation = "relu") %>%
+    layer_dense(units = 1)
+  
+  model %>% compile(
+    loss = "mse",
+    optimizer = optimizer_rmsprop(),
+    metrics = list("mean_absolute_error")
+  )
+  
+  model
+}
+
+model <- build_model()
+model %>% summary()
+
+```
+
+```{r}
+
+print_dot_callback <- callback_lambda(
+  on_epoch_end = function(epoch, logs) {
+    if (epoch %% 80 == 0) cat("\n")
+    cat(".")
+  }
+)    
+
+epochs <- 500
+
+```
+
+
+```{r}
+history <- model %>% fit(
+  train_scaled,
+  
+  epochs = epochs,
+  validation_split = 0.2,
+  verbose = 0,
+  callbacks = list(print_dot_callback)
+)
+```
+
+
+The method of error 
+cross validation
 
 ### Modelling 2
 The following correlation plot shows that:
@@ -558,3 +728,8 @@ XXXXXXXXXXX
 ```{r ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE}
 ```
 
+
+to delete after?
+To help us figure out which attributes are most important, and therefore predict the average house price, the following factors are introduced:
+* distance from CBD (from new dataset)
+* population density (population size divided by area size)
