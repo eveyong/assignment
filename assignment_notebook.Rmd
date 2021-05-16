@@ -650,7 +650,7 @@ legend('bottomright',legend='NN',pch=18,col='red', bty='n')
 ```{r}
 #calculating the MSE for the NN
 MSE.nn <- sum((test.rescaled - pr.nn.rescaled)^2)/nrow(test_scaled)
-cat("MSE for NN model =", MSE.nn, "\n")
+cat("RMSE for NN model =", sqrt(MSE.nn), "\n")
 
 ```
 
@@ -678,8 +678,9 @@ nagelkerke(lm.fit)
 ```{r}
 
 MSE.lm <- sum((lm.pred - test$average_price)^2)/nrow(test)
-cat("MSE for linear model =", MSE.lm, "\n")
+cat("RMSE for linear model =", sqrt(MSE.lm), "\n")
 
+library(boot)
 lm.fullfit <- glm(average_price~.,data=data_NN_complete)
 cat("10 fold cross valiation error for GLM =", cv.glm(data_NN_complete,lm.fullfit,K=10)$delta[1], "\n")
 
@@ -785,7 +786,8 @@ tree <- rpart(average_price ~ .,
                          data=train_tree,
                          method="anova", #not Poisson nor discrete so choose anova
                          control = rpart.control(xval=10,cp=0.0000001))
-rpart.plot(tree)
+rpart.plot(tree,
+           main = "Decision Tree before pruning")
 
 ```
 ```{r}
@@ -802,7 +804,7 @@ rmse_reg <- function(model_obj, testing = NULL, target = NULL) {
 ```
 
 ```{r}
-cat("MSE of regression tree =", rmse_reg(tree, test_tree, "average_price")^2, "\n")
+cat("RMSE of regression tree =", rmse_reg(tree, test_tree, "average_price"), "\n")
 ```
 
 If we grow an overly complex tree as in the tree diagram above, there tends to be overfitting to the training data, which results in poor generalisation performance.
@@ -835,14 +837,15 @@ cat("Optimal complexity parameter = ", CP_select, "\n")
 
 ```{r}
 tree_pruned <- prune(tree, cp = CP_select)
-rpart.plot(tree_pruned)
+rpart.plot(tree_pruned,
+           main = "Decision Tree after Pruning")
 ```
 
 ```{r}
 
 yhat <- predict(tree_pruned, newdata = test_tree)
 actual <- test_tree$average_price
-plot(yhat, actual, xlab = "Predicted", ylab = "Actual", main = "Predicted vs Actual")
+plot(yhat, actual, xlab = "Predicted", ylab = "Actual", main = "Predicted vs Actual after pruning")
 abline(0,1)
 
 ```
@@ -853,7 +856,7 @@ abline(0,1)
 
 
 #calculate and print the MSE for tree after pruning
-cat("MSE of regression tree after pruning =", rmse_reg(tree_pruned, test_tree, "average_price")^2, "\n")
+cat("RMSE of regression tree after pruning =", rmse_reg(tree_pruned, test_tree, "average_price"), "\n")
 ```
 
 The MSE is slightly higher than the previous tree, but still higher than that of the neural network model, which was 3bn. 
@@ -879,9 +882,9 @@ train.rpart
 
 ```
 
-We calculate the MSE using CARET
+We calculate the RMSE using CARET
 ```{r}
-rmse_reg(train.rpart, test_tree, "average_price")^2
+rmse_reg(train.rpart, test_tree, "average_price")
 ```
 The MSE has greatly reduced to less than 1bn, even more effective than the previous NN model.
 
@@ -890,7 +893,8 @@ However, the diagram below shows that there are many leaves compared to the unpr
 ```{r}
 
 require(rpart.plot)
-rpart.plot(train.rpart$finalModel)
+rpart.plot(train.rpart$finalModel,
+           main = "Decision Tree using Caret")
 
 ```
 The new model resulted in a very large tree as pictured above. There is very high chance that it is overfitting the model.
@@ -900,22 +904,38 @@ The plot below shows the predicted versus actual average house prices using the 
 ```{r}
 yhat2 <- predict(train.rpart$finalModel, newdata = test_tree)
 actual2 <- test_tree$average_price
-plot(yhat2, actual2, xlab = "Predicted", ylab = "Actual", main = "Predicted vs Actual")
+plot(yhat2, actual2, xlab = "Predicted", ylab = "Actual", main = "Predicted vs Actual using CARET")
 abline(0,1)
 ```
-
-
-
 
 \newpage
 ## Evaluation of Models
 
+The MSE for the models are summarised below:
 
+```{r}
+
+cat("RMSE for linear model =", sqrt(MSE.lm), "\n")
+cat("RMSE for NN model =", sqrt(MSE.nn), "\n")
+cat("RMSE of regression tree =", rmse_reg(tree, test_tree, "average_price"), "\n")
+cat("RMSE of regression tree after pruning =", rmse_reg(tree_pruned, test_tree, "average_price"), "\n")
+cat("RMSE using decision tree with CARET =", rmse_reg(train.rpart, test_tree, "average_price"), "\n")
+
+```
+
+The diagram below shows real versus predicted for different machine learning algorithms.
+
+```{r}
+
+```
+
+Neural Network model did the best job in predicitng average house prices in London. Multiple Linear Regression and Decision Tree was not as good at predicting the average house prices.  
 
 
 
 \newpage
 ## Conclusion
+
 
 
 
@@ -931,106 +951,106 @@ abline(0,1)
 ```
 
 
-to delete after?
-To help us figure out which attributes are most important, and therefore predict the average house price, the following factors are introduced:
-* distance from CBD (from new dataset)
-* population density (population size divided by area size)
+<!-- to delete after? -->
+<!-- To help us figure out which attributes are most important, and therefore predict the average house price, the following factors are introduced: -->
+<!-- * distance from CBD (from new dataset) -->
+<!-- * population density (population size divided by area size) -->
 
-```{r, warning = FALSE}
+<!-- ```{r, warning = FALSE} -->
 
-#install.packages("keras")
-library(keras) 
+<!-- #install.packages("keras") -->
+<!-- library(keras)  -->
 
-#build the model with two densely connected hidden layers with one single continuous layer as output
-#create function for the model
-build_model <- function() {
-  model <- keras_model_sequential() %>%
-    layer_dense(units = 64, activation = "relu",
-                input_shape = dim(train_scaled)[2]) %>%
-    layer_dense(units = 64, activation = "relu") %>%
-    layer_dense(units = 1)
-  
-  model %>% compile(
-    loss = "mse",
-    optimizer = optimizer_rmsprop(),
-    metrics = list("mean_absolute_error")
-  )
-  
-  model
-}
+<!-- #build the model with two densely connected hidden layers with one single continuous layer as output -->
+<!-- #create function for the model -->
+<!-- build_model <- function() { -->
+<!--   model <- keras_model_sequential() %>% -->
+<!--     layer_dense(units = 64, activation = "relu", -->
+<!--                 input_shape = dim(train_scaled)[2]) %>% -->
+<!--     layer_dense(units = 64, activation = "relu") %>% -->
+<!--     layer_dense(units = 1) -->
 
-model <- build_model()
-model %>% summary()
+<!--   model %>% compile( -->
+<!--     loss = "mse", -->
+<!--     optimizer = optimizer_rmsprop(), -->
+<!--     metrics = list("mean_absolute_error") -->
+<!--   ) -->
 
-```
+<!--   model -->
+<!-- } -->
 
-```{r}
+<!-- model <- build_model() -->
+<!-- model %>% summary() -->
 
-print_dot_callback <- callback_lambda(
-  on_epoch_end = function(epoch, logs) {
-    if (epoch %% 80 == 0) cat("\n")
-    cat(".")
-  }
-)    
+<!-- ``` -->
 
-epochs <- 500
+<!-- ```{r} -->
 
-```
+<!-- print_dot_callback <- callback_lambda( -->
+<!--   on_epoch_end = function(epoch, logs) { -->
+<!--     if (epoch %% 80 == 0) cat("\n") -->
+<!--     cat(".") -->
+<!--   } -->
+<!-- )     -->
 
+<!-- epochs <- 500 -->
 
-```{r}
-history <- model %>% fit(
-  train_scaled,
-  
-  epochs = epochs,
-  validation_split = 0.2,
-  verbose = 0,
-  callbacks = list(print_dot_callback)
-)
-```
-
-```{r}
-#predict tree to the train and test datasets
-
-train_tree$fit <- train_tree$average_price*predict(tree_pruned)
-test_tree$fit <- test_tree$average_price*predict(tree_pruned, newdata=test_tree)
-
-#calculate in sample and our of sample error based on deviance loss function
-in_sample_err<-2*(sum((train_tree$average_price/train_tree$fit))-sum(train_tree$average_price)+sum(train_tree$fit))/nrow(train_tree)
-out_sample_err<-2*(sum((test_tree$average_price/test_tree$fit))-sum(test_tree$average_price)+sum(test_tree$fit))/nrow(test_tree)
-
-cat("in-sample error using deviance loss fuction =", in_sample_err, "\n")
-cat("out-of-sample error using deviance loss function =", out_sample_err, "\n")
-
-```
-
-```{r}
-train_tree$fit<-train_tree$fit*predict(boosting.step)^shrinkage
-    test_tree$fit<-test_tree$fit*predict(boosting.step, newdata=test_tree)^shrinkage
-
-    in_sample_error[k]<-2*(sum((train_tree$average_price/train_tree$fit))-sum(train_tree$average_price)+sum(train_tree$fit))/nrow(train_tree)
-    out_sample_error[k]<-2*(sum((test_tree$average_price/test_tree$fit))-sum(test_tree$average_price)+sum(test_tree$fit))/nrow(test_tree)
-```
-
-```{r}
-#perform boosting machine with SBS tree with K=2 leaves only
-idepth<-30
-K<-50 #number of iterations
-
-rmse_reg_err <- vector()
-
-for(k in 1:K){
-    boosting.step <- rpart(average_price ~ .,
-                         data=train_tree,
-                         method="anova", #not Poisson nor discrete so choose anova
-                         control = rpart.control(maxsurrogate=0, xval=1,cp=0.007,maxdepth=idepth))
-    
-    rmse_reg_err[k] <- rmse_reg(boosting.step, test_tree, "average_price")^2
-    
-}
-
-par(mfrow=c(1,2))
-plot(seq(1:K),rmse_reg_err, xlab="iteration", ylab="MSE")
+<!-- ``` -->
 
 
-```
+<!-- ```{r} -->
+<!-- history <- model %>% fit( -->
+<!--   train_scaled, -->
+
+<!--   epochs = epochs, -->
+<!--   validation_split = 0.2, -->
+<!--   verbose = 0, -->
+<!--   callbacks = list(print_dot_callback) -->
+<!-- ) -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- #predict tree to the train and test datasets -->
+
+<!-- train_tree$fit <- train_tree$average_price*predict(tree_pruned) -->
+<!-- test_tree$fit <- test_tree$average_price*predict(tree_pruned, newdata=test_tree) -->
+
+<!-- #calculate in sample and our of sample error based on deviance loss function -->
+<!-- in_sample_err<-2*(sum((train_tree$average_price/train_tree$fit))-sum(train_tree$average_price)+sum(train_tree$fit))/nrow(train_tree) -->
+<!-- out_sample_err<-2*(sum((test_tree$average_price/test_tree$fit))-sum(test_tree$average_price)+sum(test_tree$fit))/nrow(test_tree) -->
+
+<!-- cat("in-sample error using deviance loss fuction =", in_sample_err, "\n") -->
+<!-- cat("out-of-sample error using deviance loss function =", out_sample_err, "\n") -->
+
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- train_tree$fit<-train_tree$fit*predict(boosting.step)^shrinkage -->
+<!--     test_tree$fit<-test_tree$fit*predict(boosting.step, newdata=test_tree)^shrinkage -->
+
+<!--     in_sample_error[k]<-2*(sum((train_tree$average_price/train_tree$fit))-sum(train_tree$average_price)+sum(train_tree$fit))/nrow(train_tree) -->
+<!--     out_sample_error[k]<-2*(sum((test_tree$average_price/test_tree$fit))-sum(test_tree$average_price)+sum(test_tree$fit))/nrow(test_tree) -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- #perform boosting machine with SBS tree with K=2 leaves only -->
+<!-- idepth<-30 -->
+<!-- K<-50 #number of iterations -->
+
+<!-- rmse_reg_err <- vector() -->
+
+<!-- for(k in 1:K){ -->
+<!--     boosting.step <- rpart(average_price ~ ., -->
+<!--                          data=train_tree, -->
+<!--                          method="anova", #not Poisson nor discrete so choose anova -->
+<!--                          control = rpart.control(maxsurrogate=0, xval=1,cp=0.007,maxdepth=idepth)) -->
+
+<!--     rmse_reg_err[k] <- rmse_reg(boosting.step, test_tree, "average_price")^2 -->
+
+<!-- } -->
+
+<!-- par(mfrow=c(1,2)) -->
+<!-- plot(seq(1:K),rmse_reg_err, xlab="iteration", ylab="MSE") -->
+
+
+<!-- ``` -->
